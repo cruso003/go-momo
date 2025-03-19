@@ -11,11 +11,13 @@ A simple, clean, and easy-to-use Go package for integrating with MTN Mobile Mone
 - Account balance and user information
 - Transaction status checking
 - Automatic token management
+- Idempotency support to prevent duplicate transactions
+- Comprehensive error handling
 
 ## Installation
 
 ```bash
-go get github.com/yourusername/momomtn
+go get github.com/cruso003/momomtn
 ```
 
 ## Quick Start
@@ -29,7 +31,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/yourusername/momomtn"
+	"github.com/cruso003/momomtn"
 )
 
 func main() {
@@ -44,8 +46,10 @@ func main() {
 		context.Background(),
 		"231123456789",
 		10.00,
-		"Payment for goods",
-		"Thank you",
+		&momomtn.RequestToPayOptions{
+			PayerMessage: "Payment for goods",
+			PayeeNote: "Thank you",
+		},
 	)
 	if err != nil {
 		log.Fatalf("Failed to request payment: %v", err)
@@ -57,22 +61,36 @@ func main() {
 
 ## Configuration
 
+### Environment Variables
+
 You can configure the package using environment variables:
 
 ```
-MOMO_SUBSCRIPTION_KEY=your-subscription-key
-MOMO_DISBURSEMENT_KEY=your-disbursement-key
+# Sandbox Environment
+MOMO_SUBSCRIPTION_KEY=your-sandbox-subscription-key
+MOMO_DISBURSEMENT_KEY=your-sandbox-disbursement-key
 MOMO_TARGET_ENVIRONMENT=sandbox
 MOMO_CALLBACK_HOST=https://your-callback-host.com
 MOMO_HOST=sandbox.momodeveloper.mtn.com
-MOMO_API_USER=your-api-user-id (for production)
-MOMO_API_KEY=your-api-key (for production)
 MOMO_CURRENCY=EUR
+
+# Production Environment
+MOMO_PROD_SUBSCRIPTION_KEY=your-production-subscription-key
+MOMO_PROD_DISBURSEMENT_KEY=your-production-disbursement-key
+MOMO_PROD_CALLBACK_HOST=your-production-callback-host
+MOMO_PROD_HOST=your-production-host
+MOMO_PROD_TARGET_ENVIRONMENT=your-production-target-environment
+MOMO_PROD_API_USER=your-production-api-user
+MOMO_PROD_API_KEY=your-production-api-key
+MOMO_PROD_CURRENCY=your-production-currency
 ```
 
-Or using code:
+### Code Configuration
+
+Or configure directly in code:
 
 ```go
+// Sandbox configuration
 config, err := momomtn.NewConfig(
     momomtn.Sandbox,
     momomtn.WithSubscriptionKey("your-subscription-key"),
@@ -82,56 +100,162 @@ config, err := momomtn.NewConfig(
     momomtn.WithTargetEnvironment("sandbox"),
     momomtn.WithCurrency("EUR"),
 )
+
+// Production configuration
+config, err := momomtn.NewConfig(
+    momomtn.Production,
+    momomtn.WithSubscriptionKey("your-production-subscription-key"),
+    momomtn.WithDisbursementKey("your-production-disbursement-key"),
+    momomtn.WithCallbackHost("your-production-callback-host"),
+    momomtn.WithHost("your-production-host"),
+    momomtn.WithTargetEnvironment("your-production-target-environment"),
+    momomtn.WithAPIUser("your-production-api-user"),
+    momomtn.WithAPIKey("your-production-api-key"),
+    momomtn.WithCurrency("your-production-currency"),
+)
 ```
 
-## API Reference
+## Usage Examples
 
-### Collection Service
+### Collection Service (Receiving Payments)
 
 ```go
-// Request a payment
-referenceID, err := client.Collection.RequestToPay(ctx, phone, amount, message, note)
+// Request a payment with idempotency key
+referenceID, err := client.Collection.RequestToPay(
+    ctx,
+    phone,
+    amount,
+    &momomtn.RequestToPayOptions{
+        IdempotencyKey: "unique-payment-id-12345",
+        PayerMessage: "Payment for order #12345",
+        PayeeNote: "Thank you for your order",
+    },
+)
 
 // Check transaction status
 status, err := client.Collection.GetTransactionStatus(ctx, referenceID)
+fmt.Printf("Transaction status: %s\n", status.Status)
 
 // Get account balance
 balance, currency, err := client.Collection.GetAccountBalance(ctx)
+fmt.Printf("Balance: %s %s\n", balance, currency)
 
 // Get account holder information
 accountInfo, err := client.Collection.GetAccountHolderInfo(ctx, phone)
+fmt.Printf("Account holder: %s %s\n", accountInfo.GivenName, accountInfo.FamilyName)
 ```
 
-### Disbursement Service
+### Disbursement Service (Sending Money)
 
 ```go
-// Send money
-referenceID, err := client.Disbursement.Transfer(ctx, phone, amount, message, note)
+// Send money with idempotency key
+referenceID, err := client.Disbursement.Transfer(
+    ctx,
+    phone,
+    amount,
+    &momomtn.TransferOptions{
+        IdempotencyKey: "unique-transfer-id-12345",
+        PayerMessage: "Refund for order #12345",
+        PayeeNote: "Refund processed",
+    },
+)
 
 // Check transfer status
 status, err := client.Disbursement.GetTransferStatus(ctx, referenceID)
+fmt.Printf("Transfer status: %s\n", status.Status)
 
 // Get account balance
 balance, currency, err := client.Disbursement.GetAccountBalance(ctx)
+fmt.Printf("Disbursement balance: %s %s\n", balance, currency)
 
 // Get account holder information
 accountInfo, err := client.Disbursement.GetAccountHolderInfo(ctx, phone)
+fmt.Printf("Account holder: %s %s\n", accountInfo.GivenName, accountInfo.FamilyName)
 ```
+
+## Idempotency Support
+
+The package includes built-in support for idempotency to prevent duplicate transactions:
+
+```go
+// Generate an idempotency key based on business logic
+idempotencyKey := momomtn.GenerateIdempotencyKey(
+    "payment",
+    userID,
+    orderID,
+    time.Now().Format("20060102"),
+)
+
+// Use the key in your request
+referenceID, err := client.Collection.RequestToPay(
+    ctx,
+    phone,
+    amount,
+    &momomtn.RequestToPayOptions{
+        IdempotencyKey: idempotencyKey,
+        // Other options...
+    },
+)
+```
+
+## Troubleshooting
+
+### IP Whitelisting for Disbursement
+
+For production disbursement operations, MTN MoMo requires your IP address to be whitelisted. If you encounter a 403 Forbidden error with a message like "IP not authorized to utilize Disbursement API", you'll need to:
+
+1. Identify your public IP address
+2. Contact your MTN Account Manager with your public IP address
+3. Wait for confirmation (typically 1-2 business days)
+4. Test again after whitelisting is complete
+
+Collection operations typically don't require IP whitelisting and should work without this step.
+
+### Common Errors
+
+- **401 Unauthorized**: Check your subscription keys and API credentials
+- **403 Forbidden**: Check IP whitelisting for disbursement operations
+- **404 Not Found**: Verify the API endpoint and reference IDs
+- **500 Internal Server Error**: Contact MTN support
+
+## Examples
+
+The package includes several examples in the `examples` directory:
+
+- `basic.go`: Basic authentication test
+- `payment/main.go`: Sandbox payment flow
+- `live_payment/main.go`: Production payment flow
+
+To run the examples:
+
+```bash
+# Set environment variables
+source examples/.env
+
+# Run basic authentication test
+cd examples
+go run basic.go
+
+# Run sandbox payment flow
+cd examples/payment
+go run main.go
+
+# Run production payment flow (after setting production environment variables)
+cd examples/live_payment
+go run main.go
+```
+
+## Getting MTN MoMo API Credentials
+
+1. Register for a developer account at [MTN MoMo Developer Portal](https://momodeveloper.mtn.com/)
+2. Subscribe to Collection and/or Disbursement products
+3. Get your subscription keys and other credentials
+4. For production, contact MTN to get production credentials
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-```
 
-## Conclusion
+## Contributing
 
-This package provides a clean, well-structured implementation for integrating with MTN Mobile Money API. Key features include:
-
-1. **Environment Flexibility**: Works in both sandbox and production environments
-2. **Configuration Options**: Multiple ways to configure the package
-3. **Service Separation**: Clear separation between collection and disbursement services
-4. **Error Handling**: Custom error types for better error reporting
-5. **Token Management**: Automatic access token management and caching
-6. **Examples**: Practical examples for common use cases
-
-The package follows Go best practices with clear interfaces, proper error handling, and comprehensive documentation. It handles the complexities of the MTN MoMo API while providing a simple and intuitive interface for developers.
+Contributions are welcome! Please feel free to submit a Pull Request.
