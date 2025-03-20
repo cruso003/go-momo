@@ -258,15 +258,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-```
-
-This enhanced README:
-
-1. Updates the examples to use the options pattern we implemented
-2. Provides separate sections for sandbox and production configurations
-3. Adds more detailed examples for both collection and disbursement
-4. Includes a section on idempotency support
-5. Adds troubleshooting information, especially about IP whitelisting
-6. Provides information about the example files
-7. Adds a section on getting MTN MoMo API credentials
+Contributions are welcome! Please feel free to submit a Pull Request anytime.
