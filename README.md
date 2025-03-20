@@ -15,7 +15,7 @@ A simple, clean, and easy-to-use Go package for integrating with MTN Mobile Mone
 ## Installation
 
 ```bash
-go get github.com/yourusername/momomtn
+go get github.com/cruso003/momomtn
 ```
 
 ## Quick Start
@@ -29,7 +29,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/yourusername/momomtn"
+	"github.com/cruso003/momomtn"
 )
 
 func main() {
